@@ -5,8 +5,18 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { exportToCSV } from '@/lib/export';
 import { Truck, Users, CheckCircle, AlertTriangle, RefreshCw, Navigation, Download, Smartphone } from 'lucide-react';
-import FleetMap from '@/components/FleetMap';
 import Modal from '@/components/Modal';
+import dynamic from 'next/dynamic';
+
+// Disable SSR for Mapbox GL component
+const FleetMap = dynamic(() => import('@/components/FleetMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full min-h-[350px] bg-slate-900 flex items-center justify-center rounded-lg border border-slate-700/50">
+      <p className="text-sm text-slate-400 animate-pulse">Loading Mapbox Telemetry...</p>
+    </div>
+  ),
+});
 
 export default function DispatcherDashboard() {
   const [stats, setStats] = useState({
