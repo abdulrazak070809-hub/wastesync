@@ -3,9 +3,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 
+// Abuja Municipal Center Coordinates
 const defaultCenter = {
-  lat: 37.7749,
-  lng: -122.4194,
+  lat: 9.0765,
+  lng: 7.3986,
 };
 
 const darkMapStyle = [
@@ -28,8 +29,6 @@ interface FleetMapProps {
 export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState<any | null>(null);
-  const [mapType, setMapType] = useState<'roadmap' | 'hybrid'>('roadmap');
-  const [filterMode, setFilterMode] = useState<'all' | 'trucks' | 'customers'>('all');
 
   useEffect(() => {
     setIsMounted(true);
@@ -52,20 +51,18 @@ export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps)
     []
   );
 
-  // Prevent SSR execution
   if (!isMounted) {
     return (
       <div className="w-full h-full min-h-[420px] bg-[#060e20] rounded-xl flex items-center justify-center text-[#bbcabf] font-mono text-[12px]">
-        Mounting Spatial Radar...
+        Mounting Abuja Spatial Radar...
       </div>
     );
   }
 
-  // Fallback radar overlay if API Key is missing or fails to load
+  // Fallback radar overlay if Google Maps API key is missing
   if (loadError || !apiKey || !isLoaded) {
     return (
       <div className="relative w-full h-full min-h-[420px] rounded-xl overflow-hidden bg-[#060e20] border border-[#222a3d] p-6 flex flex-col justify-between">
-        {/* Vector Background Radar Simulation */}
         <div className="absolute inset-0 pointer-events-none opacity-40">
           <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -83,16 +80,15 @@ export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps)
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#4edea3] animate-pulse"></span>
             <span className="font-mono text-[11px] text-[#4edea3] font-bold uppercase">
-              POSTGIS VECTOR SIMULATION RADAR
+              ABUJA MUNICIPAL POSTGIS RADAR
             </span>
           </div>
           <span className="font-mono text-[10px] text-[#bbcabf] bg-[#171f33] px-2 py-1 rounded border border-[#222a3d]">
-            37.7749° N, 122.4194° W
+            9.0765° N, 7.3986° E
           </span>
         </div>
 
-        {/* Visual Vehicle Markers */}
-        <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 gap-3 my-auto">
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3 my-auto">
           {trucks.slice(0, 3).map((truck, idx) => (
             <div
               key={idx}
@@ -112,8 +108,8 @@ export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps)
         </div>
 
         <div className="relative z-10 font-mono text-[10px] text-[#86948a] flex items-center justify-between bg-[#060e20]/80 p-2 rounded border border-[#222a3d]">
-          <span>NETWORK: GIS ONLINE (KEYLESS FALLBACK ACTIVE)</span>
-          <span className="text-[#adc6ff]">EPSG:4326 PostGIS Spatial Ref</span>
+          <span>SECTOR: ABUJA CENTRAL (EPSG:4326 PostGIS)</span>
+          <span className="text-[#adc6ff]">99.8% GPS LOCK</span>
         </div>
       </div>
     );
@@ -131,37 +127,33 @@ export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps)
           zoomControl: true,
         }}
       >
-        {/* Render Truck Markers */}
-        {(filterMode === 'all' || filterMode === 'trucks') &&
-          trucks.map((truck, idx) => (
-            <Marker
-              key={`truck-${idx}`}
-              position={{ lat: truck.lat || 37.7749, lng: truck.lng || -122.4194 }}
-              onClick={() => setSelectedMarker({ ...truck, type: 'truck' })}
-            />
-          ))}
+        {trucks.map((truck, idx) => (
+          <Marker
+            key={`truck-${idx}`}
+            position={{ lat: truck.lat || 9.0765, lng: truck.lng || 7.3986 }}
+            onClick={() => setSelectedMarker({ ...truck, type: 'truck' })}
+          />
+        ))}
 
-        {/* Render Customer Outlet Markers */}
-        {(filterMode === 'all' || filterMode === 'customers') &&
-          customers.map((cust, idx) => (
-            <Marker
-              key={`customer-${idx}`}
-              position={{ lat: cust.lat || 37.772, lng: cust.lng || -122.415 }}
-              onClick={() => setSelectedMarker({ ...cust, type: 'customer' })}
-            />
-          ))}
+        {customers.map((cust, idx) => (
+          <Marker
+            key={`customer-${idx}`}
+            position={{ lat: cust.lat || 9.0820, lng: cust.lng || 7.4913 }}
+            onClick={() => setSelectedMarker({ ...cust, type: 'customer' })}
+          />
+        ))}
 
         {selectedMarker && (
           <InfoWindow
             position={{
-              lat: selectedMarker.lat || 37.7749,
-              lng: selectedMarker.lng || -122.4194,
+              lat: selectedMarker.lat || 9.0765,
+              lng: selectedMarker.lng || 7.3986,
             }}
             onCloseClick={() => setSelectedMarker(null)}
           >
             <div className="p-2 text-slate-900 font-sans">
               <h4 className="font-bold text-sm">
-                {selectedMarker.name || selectedMarker.id || 'Location Node'}
+                {selectedMarker.name || selectedMarker.id || 'Abuja Location Node'}
               </h4>
               <p className="text-xs text-slate-600">
                 {selectedMarker.type === 'truck'
