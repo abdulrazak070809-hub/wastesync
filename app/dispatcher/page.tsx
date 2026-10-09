@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { ShieldCheck, LogOut, ArrowLeft, PlusCircle, Send } from 'lucide-react';
+import { ShieldCheck, LogOut, ArrowLeft, PlusCircle, Send, Trash2, UserX } from 'lucide-react';
 
 export default function DispatcherAdminPage() {
   const router = useRouter();
@@ -12,6 +12,7 @@ export default function DispatcherAdminPage() {
   const [trucks, setTrucks] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [customerForm, setCustomerForm] = useState({
     full_name: '',
@@ -38,7 +39,7 @@ export default function DispatcherAdminPage() {
 
   async function fetchDropdownData() {
     const { data: truckData } = await supabase.from('trucks').select('*');
-    const { data: customerData } = await supabase.from('customers').select('*');
+    const { data: customerData } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
     setTrucks(truckData || []);
     setCustomers(customerData || []);
   }
@@ -76,6 +77,24 @@ export default function DispatcherAdminPage() {
     }
   }
 
+  async function handleDeleteCustomer(customerId: string, customerName: string) {
+    const confirmDelete = window.confirm(`Are you sure you want to remove customer "${customerName}"?`);
+    if (!confirmDelete) return;
+
+    setDeletingId(customerId);
+    try {
+      const { error } = await supabase.from('customers').delete().eq('id', customerId);
+      if (error) throw error;
+
+      alert(`Customer "${customerName}" removed successfully.`);
+      fetchDropdownData();
+    } catch (err: any) {
+      alert('Error deleting customer: ' + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   async function handleDispatchRoute(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -103,7 +122,8 @@ export default function DispatcherAdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-5xl mx-auto space-y-8">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-800 gap-4">
           <div>
             <Link href="/" className="text-xs text-emerald-400 hover:underline flex items-center gap-1 mb-2">
@@ -123,7 +143,9 @@ export default function DispatcherAdminPage() {
           </button>
         </div>
 
+        {/* Action Panels */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Panel 1: Customer Registration */}
           <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-emerald-400 mb-4 flex items-center gap-2">
               <PlusCircle className="w-5 h-5" /> Register New Customer
@@ -189,6 +211,7 @@ export default function DispatcherAdminPage() {
             </form>
           </div>
 
+          {/* Panel 2: Route Assignment */}
           <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-blue-400 mb-4 flex items-center gap-2">
               <Send className="w-5 h-5" /> Assign Route to Truck
@@ -249,6 +272,37 @@ export default function DispatcherAdminPage() {
               </button>
             </form>
           </div>
+        </div>
+
+        {/* Panel 3: Manage & Remove Customers */}
+        <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-6 shadow-xl">
+          <h2 className="text-lg font-semibold text-rose-400 mb-4 flex items-center gap-2">
+            <UserX className="w-5 h-5" /> Manage & Remove Registered Customers
+          </h2>
+
+          {customers.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No registered customers found in the database.</p>
+          ) : (
+            <div className="divide-y divide-slate-700/60 max-h-[320px] overflow-y-auto pr-2">
+              {customers.map((customer) => (
+                <div key={customer.id} className="py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-slate-200 text-sm">{customer.full_name}</p>
+                    <p className="text-xs text-slate-400">{customer.address} • {customer.phone_number}</p>
+                  </div>
+                  
+                  <button
+                    onClick={() => handleDeleteCustomer(customer.id, customer.full_name)}
+                    disabled={deletingId === customer.id}
+                    className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-50 shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingId === customer.id ? 'Removing...' : 'Remove'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
