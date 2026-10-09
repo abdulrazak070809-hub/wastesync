@@ -4,7 +4,6 @@ export async function POST(request: Request) {
   try {
     const { username, password } = await request.json();
 
-    // Environment variables (or default credentials for testing)
     const validUsername = process.env.DISPATCHER_USERNAME || 'admin';
     const validPassword = process.env.DISPATCHER_PASSWORD || 'wastesync2026';
 
