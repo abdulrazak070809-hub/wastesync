@@ -4,7 +4,18 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { ShieldCheck, LogOut, ArrowLeft, PlusCircle, Send, Trash2, UserX } from 'lucide-react';
+import {
+  ShieldCheck,
+  LogOut,
+  ArrowLeft,
+  PlusCircle,
+  Send,
+  Trash2,
+  UserX,
+  Edit2,
+  Check,
+  X,
+} from 'lucide-react';
 
 export default function DispatcherAdminPage() {
   const router = useRouter();
@@ -14,6 +25,17 @@ export default function DispatcherAdminPage() {
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Edit State
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    full_name: '',
+    phone_number: '',
+    address: '',
+    subscription_status: 'ACTIVE',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Registration & Dispatch Forms
   const [customerForm, setCustomerForm] = useState({
     full_name: '',
     phone_number: '',
@@ -39,7 +61,10 @@ export default function DispatcherAdminPage() {
 
   async function fetchDropdownData() {
     const { data: truckData } = await supabase.from('trucks').select('*');
-    const { data: customerData } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
+    const { data: customerData } = await supabase
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false });
     setTrucks(truckData || []);
     setCustomers(customerData || []);
   }
@@ -74,6 +99,49 @@ export default function DispatcherAdminPage() {
       alert('Error saving customer: ' + err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Start Editing
+  function handleStartEdit(customer: any) {
+    setEditingId(customer.id);
+    setEditForm({
+      full_name: customer.full_name,
+      phone_number: customer.phone_number,
+      address: customer.address,
+      subscription_status: customer.subscription_status,
+    });
+  }
+
+  // Cancel Editing
+  function handleCancelEdit() {
+    setEditingId(null);
+    setEditForm({ full_name: '', phone_number: '', address: '', subscription_status: 'ACTIVE' });
+  }
+
+  // Save Edit
+  async function handleSaveEdit(customerId: string) {
+    setSavingEdit(true);
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({
+          full_name: editForm.full_name,
+          phone_number: editForm.phone_number,
+          address: editForm.address,
+          subscription_status: editForm.subscription_status,
+        })
+        .eq('id', customerId);
+
+      if (error) throw error;
+
+      alert('Customer details updated successfully!');
+      setEditingId(null);
+      fetchDropdownData();
+    } catch (err: any) {
+      alert('Error updating customer: ' + err.message);
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -274,31 +342,134 @@ export default function DispatcherAdminPage() {
           </div>
         </div>
 
-        {/* Panel 3: Manage & Remove Customers */}
+        {/* Panel 3: Manage, Edit & Remove Customers */}
         <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-6 shadow-xl">
-          <h2 className="text-lg font-semibold text-rose-400 mb-4 flex items-center gap-2">
-            <UserX className="w-5 h-5" /> Manage & Remove Registered Customers
+          <h2 className="text-lg font-semibold text-amber-400 mb-4 flex items-center gap-2">
+            <UserX className="w-5 h-5" /> Registered Customer Directory & Editing
           </h2>
 
           {customers.length === 0 ? (
             <p className="text-sm text-slate-400 italic">No registered customers found in the database.</p>
           ) : (
-            <div className="divide-y divide-slate-700/60 max-h-[320px] overflow-y-auto pr-2">
+            <div className="divide-y divide-slate-700/60 max-h-[420px] overflow-y-auto pr-2">
               {customers.map((customer) => (
-                <div key={customer.id} className="py-3 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-slate-200 text-sm">{customer.full_name}</p>
-                    <p className="text-xs text-slate-400">{customer.address} • {customer.phone_number}</p>
-                  </div>
-                  
-                  <button
-                    onClick={() => handleDeleteCustomer(customer.id, customer.full_name)}
-                    disabled={deletingId === customer.id}
-                    className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-50 shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    {deletingId === customer.id ? 'Removing...' : 'Remove'}
-                  </button>
+                <div key={customer.id} className="py-3.5">
+                  {editingId === customer.id ? (
+                    /* Inline Editing Mode */
+                    <div className="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-amber-500/30">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                            Full Name
+                          </label>
+                          <input
+                            type="text"
+                            value={editForm.full_name}
+                            onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                            className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                            Phone Number
+                          </label>
+                          <input
+                            type="text"
+                            value={editForm.phone_number}
+                            onChange={(e) => setEditForm({ ...editForm, phone_number: e.target.value })}
+                            className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                            Street Address
+                          </label>
+                          <input
+                            type="text"
+                            value={editForm.address}
+                            onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                            className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                            Status
+                          </label>
+                          <select
+                            value={editForm.subscription_status}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, subscription_status: e.target.value })
+                            }
+                            className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                          >
+                            <option value="ACTIVE">ACTIVE</option>
+                            <option value="OVERDUE">OVERDUE</option>
+                            <option value="SUSPENDED">SUSPENDED</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          onClick={handleCancelEdit}
+                          className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1 rounded text-xs transition"
+                        >
+                          <X className="w-3.5 h-3.5" /> Cancel
+                        </button>
+                        <button
+                          onClick={() => handleSaveEdit(customer.id)}
+                          disabled={savingEdit}
+                          className="flex items-center gap-1 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs transition disabled:opacity-50"
+                        >
+                          <Check className="w-3.5 h-3.5" /> {savingEdit ? 'Saving...' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Read-Only Display Mode */
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-200 text-sm">{customer.full_name}</p>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+                              customer.subscription_status === 'ACTIVE'
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            }`}
+                          >
+                            {customer.subscription_status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {customer.address} • {customer.phone_number}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => handleStartEdit(customer)}
+                          className="flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" /> Edit
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteCustomer(customer.id, customer.full_name)}
+                          disabled={deletingId === customer.id}
+                          className="flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          {deletingId === customer.id ? 'Removing...' : 'Delete'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
