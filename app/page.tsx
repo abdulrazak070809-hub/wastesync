@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { exportToCSV } from '@/lib/export';
-import { Truck, Users, CheckCircle, AlertTriangle, RefreshCw, Navigation, Download, Smartphone } from 'lucide-react';
+import { Truck, Users, CheckCircle, AlertTriangle, RefreshCw, Navigation, Download, Smartphone, Lock, Unlock } from 'lucide-react';
 import Modal from '@/components/Modal';
-import dynamic from 'next/dynamic';
 
-// Disable SSR for Mapbox GL component
+// Disable SSR for Mapbox GL component to prevent Vercel build/runtime crashes
 const FleetMap = dynamic(() => import('@/components/FleetMap'), {
   ssr: false,
   loading: () => (
@@ -33,6 +33,12 @@ export default function DispatcherDashboard() {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
 
+  // Admin Auth Gate State
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
+  const [passcodeInput, setPasscodeInput] = useState('');
+  const [pendingAction, setPendingAction] = useState<'customer' | 'dispatch' | null>(null);
+
   // Proximity Query States
   const [selectedCustomerForProximity, setSelectedCustomerForProximity] = useState('');
   const [nearestTrucks, setNearestTrucks] = useState<any[]>([]);
@@ -56,6 +62,12 @@ export default function DispatcherDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Check if admin is unlocked in current browser session
+    const unlocked = sessionStorage.getItem('wastesync_admin_unlocked');
+    if (unlocked === 'true') {
+      setIsAdminUnlocked(true);
+    }
 
     // Subscribe to live Postgres database changes
     const channel = supabase
@@ -109,6 +121,35 @@ export default function DispatcherDashboard() {
       console.error('Error fetching metrics:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Admin Auth Verification
+  function handleAdminUnlock(e: React.FormEvent) {
+    e.preventDefault();
+    const correctPasscode = process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123';
+
+    if (passcodeInput === correctPasscode) {
+      setIsAdminUnlocked(true);
+      sessionStorage.setItem('wastesync_admin_unlocked', 'true');
+      setPasscodeModalOpen(false);
+      setPasscodeInput('');
+
+      if (pendingAction === 'customer') setIsCustomerModalOpen(true);
+      if (pendingAction === 'dispatch') setIsDispatchModalOpen(true);
+      setPendingAction(null);
+    } else {
+      alert('Incorrect Admin Passcode!');
+    }
+  }
+
+  function triggerProtectedAction(action: 'customer' | 'dispatch') {
+    if (isAdminUnlocked) {
+      if (action === 'customer') setIsCustomerModalOpen(true);
+      if (action === 'dispatch') setIsDispatchModalOpen(true);
+    } else {
+      setPendingAction(action);
+      setPasscodeModalOpen(true);
     }
   }
 
@@ -306,22 +347,38 @@ export default function DispatcherDashboard() {
         {/* Dispatch Quick Actions & Tools */}
         <div className="space-y-6">
           <div className="bg-slate-800/50 border border-slate-700/80 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-slate-200 mb-4">Dispatcher Quick Actions</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-slate-200">Dispatcher Quick Actions</h2>
+              {isAdminUnlocked ? (
+                <span className="flex items-center gap-1 text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
+                  <Unlock className="w-3 h-3" /> Unlocked
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded border border-slate-600">
+                  <Lock className="w-3 h-3" /> Protected
+                </span>
+              )}
+            </div>
+
             <div className="space-y-3">
               <button
-                onClick={() => setIsCustomerModalOpen(true)}
+                onClick={() => triggerProtectedAction('customer')}
                 className="w-full text-left bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 p-3.5 rounded-lg transition text-sm font-medium flex items-center justify-between"
               >
                 <span>+ Register New Customer Location</span>
-                <span className="text-xs bg-emerald-500/20 px-2 py-0.5 rounded">Action</span>
+                <span className="text-xs bg-emerald-500/20 px-2 py-0.5 rounded">
+                  {isAdminUnlocked ? 'Action' : 'Locked 🔒'}
+                </span>
               </button>
 
               <button
-                onClick={() => setIsDispatchModalOpen(true)}
+                onClick={() => triggerProtectedAction('dispatch')}
                 className="w-full text-left bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 p-3.5 rounded-lg transition text-sm font-medium flex items-center justify-between"
               >
                 <span>+ Assign Route to Collection Truck</span>
-                <span className="text-xs bg-blue-500/20 px-2 py-0.5 rounded">Action</span>
+                <span className="text-xs bg-blue-500/20 px-2 py-0.5 rounded">
+                  {isAdminUnlocked ? 'Action' : 'Locked 🔒'}
+                </span>
               </button>
 
               <button
@@ -389,6 +446,46 @@ export default function DispatcherDashboard() {
         </div>
       </div>
 
+      {/* MODAL 0: Admin Passcode Prompt */}
+      <Modal
+        isOpen={passcodeModalOpen}
+        onClose={() => setPasscodeModalOpen(false)}
+        title="Dispatcher Passcode Required"
+      >
+        <form onSubmit={handleAdminUnlock} className="space-y-4">
+          <p className="text-xs text-slate-400">
+            This action requires administrative access. Enter your dispatcher passcode to proceed.
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Admin Passcode</label>
+            <input
+              type="password"
+              required
+              value={passcodeInput}
+              onChange={(e) => setPasscodeInput(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div className="pt-3 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setPasscodeModalOpen(false)}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition"
+            >
+              Unlock & Proceed
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       {/* MODAL 1: Register New Customer */}
       <Modal
         isOpen={isCustomerModalOpen}
@@ -449,91 +546,4 @@ export default function DispatcherDashboard() {
             <button
               type="button"
               onClick={() => setIsCustomerModalOpen(false)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
-            >
-              {submitting ? 'Saving...' : 'Save Location'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* MODAL 2: Assign Route / Dispatch Truck */}
-      <Modal
-        isOpen={isDispatchModalOpen}
-        onClose={() => setIsDispatchModalOpen(false)}
-        title="Assign Route to Collection Truck"
-      >
-        <form onSubmit={handleDispatchRoute} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Select Customer</label>
-            <select
-              required
-              value={dispatchForm.customer_id}
-              onChange={(e) => setDispatchForm({ ...dispatchForm, customer_id: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500"
-            >
-              <option value="">-- Choose Customer --</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name} ({c.address})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Assign Truck</label>
-            <select
-              required
-              value={dispatchForm.truck_id}
-              onChange={(e) => setDispatchForm({ ...dispatchForm, truck_id: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500"
-            >
-              <option value="">-- Choose Truck --</option>
-              {trucks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.plate_number} - Driver: {t.driver_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Dispatch Notes</label>
-            <input
-              type="text"
-              value={dispatchForm.notes}
-              onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500"
-              placeholder="e.g. Empty 3 commercial bins"
-            />
-          </div>
-
-          <div className="pt-3 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setIsDispatchModalOpen(false)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
-            >
-              {submitting ? 'Dispatching...' : 'Confirm Route Assignment'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </div>
-  );
-}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200
