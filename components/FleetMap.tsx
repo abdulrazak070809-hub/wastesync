@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 
-// Abuja Municipal Center Coordinates
 const defaultCenter = {
   lat: 9.0765,
   lng: 7.3986,
@@ -21,14 +20,30 @@ const darkMapStyle = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
 ];
 
-interface FleetMapProps {
-  trucks?: any[];
-  customers?: any[];
+export interface TruckItem {
+  id: string;
+  lat: number;
+  lng: number;
+  status: string;
+  capacity: number;
+}
+
+export interface CustomerItem {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  fillLevel: number;
+}
+
+export interface FleetMapProps {
+  trucks?: TruckItem[];
+  customers?: CustomerItem[];
 }
 
 export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps) {
   const [isMounted, setIsMounted] = useState(false);
-  const [selectedMarker, setSelectedMarker] = useState<any | null>(null);
+  const [selectedMarker, setSelectedMarker] = useState<any>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -54,12 +69,11 @@ export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps)
   if (!isMounted) {
     return (
       <div className="w-full h-full min-h-[420px] bg-[#060e20] rounded-xl flex items-center justify-center text-[#bbcabf] font-mono text-[12px]">
-        Mounting Abuja Spatial Radar...
+        Mounting Spatial Radar Engine...
       </div>
     );
   }
 
-  // Fallback radar overlay if Google Maps API key is missing
   if (loadError || !apiKey || !isLoaded) {
     return (
       <div className="relative w-full h-full min-h-[420px] rounded-xl overflow-hidden bg-[#060e20] border border-[#222a3d] p-6 flex flex-col justify-between">
@@ -108,7 +122,7 @@ export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps)
         </div>
 
         <div className="relative z-10 font-mono text-[10px] text-[#86948a] flex items-center justify-between bg-[#060e20]/80 p-2 rounded border border-[#222a3d]">
-          <span>SECTOR: ABUJA CENTRAL (EPSG:4326 PostGIS)</span>
+          <span>SECTOR: ABUJA CENTRAL (PostGIS Spatial Ref)</span>
           <span className="text-[#adc6ff]">99.8% GPS LOCK</span>
         </div>
       </div>
@@ -138,7 +152,7 @@ export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps)
         {customers.map((cust, idx) => (
           <Marker
             key={`customer-${idx}`}
-            position={{ lat: cust.lat || 9.0820, lng: cust.lng || 7.4913 }}
+            position={{ lat: cust.lat || 9.082, lng: cust.lng || 7.4913 }}
             onClick={() => setSelectedMarker({ ...cust, type: 'customer' })}
           />
         ))}
@@ -153,7 +167,7 @@ export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps)
           >
             <div className="p-2 text-slate-900 font-sans">
               <h4 className="font-bold text-sm">
-                {selectedMarker.name || selectedMarker.id || 'Abuja Location Node'}
+                {selectedMarker.name || selectedMarker.id || 'Abuja Node'}
               </h4>
               <p className="text-xs text-slate-600">
                 {selectedMarker.type === 'truck'

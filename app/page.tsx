@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
-// Dynamically import Leaflet / Google Map component with SSR disabled
+// Dynamically import FleetMap with SSR disabled to bypass window access errors
 const FleetMap = dynamic(() => import('@/components/FleetMap'), {
   ssr: false,
   loading: () => (
@@ -117,7 +117,7 @@ export default function PublicTelemetryDashboard() {
       <main className="w-full pt-16 bg-[#0b1326] min-h-[calc(100vh-4rem)]">
         <div className="flex flex-col w-full">
           <div className="w-full px-6 py-6 flex flex-col gap-6">
-            {/* Top Header Status Bar */}
+            {/* Header Status Bar */}
             <div className="w-full flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
@@ -239,7 +239,7 @@ export default function PublicTelemetryDashboard() {
               </div>
             </div>
 
-            {/* Split Workspace: GIS Map | Control Operations */}
+            {/* Split Workspace: GIS Map | Control Panel */}
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
               {/* GIS MAP CONTAINER */}
               <div className="xl:col-span-8 w-full flex flex-col gap-2">
@@ -247,7 +247,7 @@ export default function PublicTelemetryDashboard() {
                   <FleetMap trucks={trucks} customers={customers} />
                 </div>
 
-                {/* Regional Sector Sub-Ribbon */}
+                {/* Sector Ribbon */}
                 <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                   <div className="p-2 rounded-lg bg-[#131b2e] flex items-center justify-between">
                     <span className="font-['JetBrains_Mono'] text-[10px] text-[#bbcabf]">Abuja Central District</span>
@@ -335,4 +335,160 @@ export default function PublicTelemetryDashboard() {
                     </span>
                   </div>
 
-                  <div className="flex flex
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-['JetBrains_Mono'] text-[10px] text-[#bbcabf] uppercase tracking-wider">
+                      Target Node For Immediate Pickup
+                    </label>
+                    <select
+                      className="w-full h-11 px-3 rounded-lg bg-[#171f33] border border-[#2d3449] text-[12px] text-[#dae2fd] focus:outline-none focus:border-[#adc6ff] transition-all cursor-pointer"
+                      value={selectedTargetNode}
+                      onChange={(e) => setSelectedTargetNode(e.target.value)}
+                    >
+                      <option value="Central District Medical Center • Out-104">
+                        Central District Medical Center • Out-104 (91% Fill)
+                      </option>
+                      <option value="Maitama Innovation Hub • Out-089">
+                        Maitama Innovation Hub • Out-089 (18% Fill)
+                      </option>
+                      <option value="Wuse Market Terminal • Out-112">
+                        Wuse Market Terminal • Out-112 (96% Fill)
+                      </option>
+                    </select>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-[#060e20] flex items-center gap-3">
+                    <div className="w-1.5 h-7 rounded-full bg-[#4edea3] animate-pulse"></div>
+                    <div className="flex-1">
+                      <div className="font-['JetBrains_Mono'] text-[10px] text-[#dae2fd] flex items-center justify-between">
+                        <span>R-Tree Spatial Query Solved</span>
+                        <span className="text-[#4edea3] font-bold">14ms</span>
+                      </div>
+                      <div className="w-full bg-[#171f33] h-1 rounded-full overflow-hidden mt-1">
+                        <div className="bg-[#4edea3] h-full w-[92%]"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Candidate Trucks List */}
+                  <div className="flex flex-col gap-3">
+                    <div className="font-['JetBrains_Mono'] text-[10px] text-[#bbcabf] uppercase tracking-wider flex items-center justify-between">
+                      <span>Candidate Intercept Units</span>
+                      <span className="text-[#adc6ff]">Sorted by Geo-Distance</span>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[#171f33] hover:bg-[#2d3449] transition-all flex flex-col gap-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-[#4edea3]/20 text-[#4edea3] font-['JetBrains_Mono'] text-[10px] flex items-center justify-center font-bold">
+                            1
+                          </span>
+                          <div>
+                            <div className="text-[14px] font-semibold text-[#dae2fd]">Marcus Cole</div>
+                            <div className="font-['JetBrains_Mono'] text-[10px] text-[#bbcabf]">
+                              Unit: <span className="text-[#adc6ff] font-bold">TRK-04</span> • 28-ton Compactor
+                            </div>
+                          </div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full bg-[#4edea3]/15 text-[#4edea3] font-['JetBrains_Mono'] text-[10px] font-bold">
+                          1.82 km
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 py-1 px-2 rounded bg-[#060e20] font-['JetBrains_Mono'] text-[10px]">
+                        <div>
+                          <span className="text-[#bbcabf] block">EST ARRIVAL</span>
+                          <span className="text-[#4edea3] font-bold">4 mins</span>
+                        </div>
+                        <div>
+                          <span className="text-[#bbcabf] block">PAYLOAD</span>
+                          <span className="text-[#dae2fd] font-bold">64% loaded</span>
+                        </div>
+                        <div>
+                          <span className="text-[#bbcabf] block">STATUS</span>
+                          <span className="text-[#adc6ff] font-bold">In Transit</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleInterceptPing('Marcus Cole (TRK-04)')}
+                        disabled={pingingDriver === 'Marcus Cole (TRK-04)'}
+                        className="w-full mt-1 py-2 px-3 rounded-lg bg-[#4edea3] text-[#003824] font-semibold text-[13px] hover:bg-[#6ffbbe] flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          {pingingDriver === 'Marcus Cole (TRK-04)' ? 'sync' : 'near_me'}
+                        </span>
+                        <span>
+                          {pingingDriver === 'Marcus Cole (TRK-04)' ? 'Dispatching...' : 'Dispatch Intercept Ping'}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[#131b2e] hover:bg-[#171f33] transition-all flex flex-col gap-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-[#adc6ff]/20 text-[#adc6ff] font-['JetBrains_Mono'] text-[10px] flex items-center justify-center font-bold">
+                            2
+                          </span>
+                          <div>
+                            <div className="text-[14px] font-semibold text-[#dae2fd]">Elena Rostova</div>
+                            <div className="font-['JetBrains_Mono'] text-[10px] text-[#bbcabf]">
+                              Unit: <span className="text-[#adc6ff] font-bold">TRK-09</span> • Side-Loader EV
+                            </div>
+                          </div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full bg-[#adc6ff]/15 text-[#adc6ff] font-['JetBrains_Mono'] text-[10px] font-bold">
+                          3.15 km
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 py-1 px-2 rounded bg-[#060e20] font-['JetBrains_Mono'] text-[10px]">
+                        <div>
+                          <span className="text-[#bbcabf] block">EST ARRIVAL</span>
+                          <span className="text-[#adc6ff] font-bold">8 mins</span>
+                        </div>
+                        <div>
+                          <span className="text-[#bbcabf] block">PAYLOAD</span>
+                          <span className="text-[#dae2fd] font-bold">42% loaded</span>
+                        </div>
+                        <div>
+                          <span className="text-[#bbcabf] block">STATUS</span>
+                          <span className="text-[#4edea3] font-bold">Available</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleInterceptPing('Elena Rostova (TRK-09)')}
+                        disabled={pingingDriver === 'Elena Rostova (TRK-09)'}
+                        className="w-full mt-1 py-2 px-3 rounded-lg bg-[#222a3d] hover:bg-[#2d3449] text-[#dae2fd] font-semibold text-[13px] flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          {pingingDriver === 'Elena Rostova (TRK-09)' ? 'sync' : 'near_me'}
+                        </span>
+                        <span>
+                          {pingingDriver === 'Elena Rostova (TRK-09)' ? 'Dispatching...' : 'Dispatch Intercept Ping'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="w-full bg-[#060e20] py-6 mt-6 border-t border-[#222a3d]">
+        <div className="w-full px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-[#bbcabf]">
+          <div className="flex items-center gap-2 font-['JetBrains_Mono'] text-[11px]">
+            <span className="material-symbols-outlined text-[16px] text-[#4edea3]">sync</span>
+            <span>WasteSync Telematics Engine • Abuja Municipal Grid Architecture</span>
+          </div>
+          <div className="font-['JetBrains_Mono'] text-[10px]">
+            © 2026 WasteSync Operations. All telemetry signals encrypted.
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
