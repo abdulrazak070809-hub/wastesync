@@ -1,95 +1,159 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import { useState, useMemo } from 'react';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 
-interface TruckLocation {
-  id: string;
-  plate_number: string;
-  driver_name: string;
-  coordinates: [number, number]; // [lng, lat]
-}
+const mapContainerStyle = {
+  width: '100%',
+  height: '100%',
+  minHeight: '380px',
+  borderRadius: '0.75rem',
+};
 
-interface CustomerLocation {
-  id: string;
-  full_name: string;
-  address: string;
-  status: string;
-  coordinates: [number, number];
-}
+// Default map center: Lagos, Nigeria coordinates
+const defaultCenter = {
+  lat: 6.5244,
+  lng: 3.3792,
+};
+
+// Dark-themed map styling matching WasteSync's UI
+const darkMapStyle = [
+  { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+  {
+    featureType: 'administrative.locality',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#cbd5e1' }],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#64748b' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry',
+    stylers: [{ color: '#334155' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#1e293b' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry',
+    stylers: [{ color: '#475569' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'geometry',
+    stylers: [{ color: '#0f172a' }],
+  },
+];
 
 interface FleetMapProps {
-  trucks: TruckLocation[];
-  customers: CustomerLocation[];
+  trucks: any[];
+  customers: any[];
 }
 
 export default function FleetMap({ trucks, customers }: FleetMapProps) {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
+  const [selectedMarker, setSelectedMarker] = useState<any | null>(null);
 
-  useEffect(() => {
-    if (!mapContainer.current) return;
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+  });
 
-    mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
+  const options = useMemo(
+    () => ({
+      styles: darkMapStyle,
+      disableDefaultUI: false,
+      zoomControl: true,
+    }),
+    []
+  );
 
-    // Initialize Mapbox centered over Lagos, Nigeria
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
-      center: [3.3792, 6.5244], // [lng, lat]
-      zoom: 11,
-    });
+  if (loadError) {
+    return (
+      <div className="w-full h-full min-h-[350px] bg-slate-900 border border-slate-800 rounded-lg flex flex-col items-center justify-center p-4">
+        <p className="text-xs text-rose-400 font-semibold mb-1">Failed to load Google Maps</p>
+        <p className="text-[11px] text-slate-500 text-center">
+          Verify NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is set in .env.local and Vercel.
+        </p>
+      </div>
+    );
+  }
 
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-    map.current.on('load', () => {
-      // Add Customer Markers
-      customers.forEach((customer) => {
-        const el = document.createElement('div');
-        el.className = 'w-4 h-4 rounded-full border-2 border-white shadow-lg cursor-pointer';
-        el.style.backgroundColor = customer.status === 'ACTIVE' ? '#10B981' : '#F43F5E';
-
-        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(
-          `<div style="color: #000; font-family: sans-serif;">
-            <strong>${customer.full_name}</strong><br/>
-            <span style="font-size: 12px; color: #555;">${customer.address}</span><br/>
-            <span style="font-size: 11px; font-weight: bold; color: ${customer.status === 'ACTIVE' ? '#059669' : '#DC2626'};">${customer.status}</span>
-          </div>`
-        );
-
-        new mapboxgl.Marker(el)
-          .setLngLat(customer.coordinates)
-          .setPopup(popup)
-          .addTo(map.current!);
-      });
-
-      // Add Truck Markers
-      trucks.forEach((truck) => {
-        const el = document.createElement('div');
-        el.className = 'w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center border-2 border-white shadow-xl cursor-pointer text-white font-bold text-xs';
-        el.innerText = '🚛';
-
-        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(
-          `<div style="color: #000; font-family: sans-serif;">
-            <strong>Truck: ${truck.plate_number}</strong><br/>
-            <span style="font-size: 12px; color: #555;">Driver: ${truck.driver_name}</span>
-          </div>`
-        );
-
-        new mapboxgl.Marker(el)
-          .setLngLat(truck.coordinates)
-          .setPopup(popup)
-          .addTo(map.current!);
-      });
-    });
-
-    return () => map.current?.remove();
-  }, [trucks, customers]);
+  if (!isLoaded) {
+    return (
+      <div className="w-full h-full min-h-[350px] bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-center">
+        <p className="text-xs text-slate-400 animate-pulse">Loading Google Maps Telemetry...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full h-[450px] rounded-lg overflow-hidden border border-slate-800 shadow-inner">
-      <div ref={mapContainer} className="w-full h-full" />
-    </div>
+    <GoogleMap
+      mapContainerStyle={mapContainerStyle}
+      center={defaultCenter}
+      zoom={11}
+      options={options}
+    >
+      {/* Vehicle Truck Markers (Blue Icons) */}
+      {trucks.map((truck) => (
+        <Marker
+          key={`truck-${truck.id}`}
+          position={{ lat: truck.coordinates[1], lng: truck.coordinates[0] }}
+          onClick={() => setSelectedMarker({ ...truck, type: 'truck' })}
+          icon={{
+            url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+          }}
+        />
+      ))}
+
+      {/* Customer Location Markers (Green Icons) */}
+      {customers.map((customer) => (
+        <Marker
+          key={`customer-${customer.id}`}
+          position={{ lat: customer.coordinates[1], lng: customer.coordinates[0] }}
+          onClick={() => setSelectedMarker({ ...customer, type: 'customer' })}
+          icon={{
+            url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+          }}
+        />
+      ))}
+
+      {/* Interactive Info Popup */}
+      {selectedMarker && (
+        <InfoWindow
+          position={{
+            lat: selectedMarker.coordinates[1],
+            lng: selectedMarker.coordinates[0],
+          }}
+          onCloseClick={() => setSelectedMarker(null)}
+        >
+          <div className="p-2 text-slate-900 max-w-[200px]">
+            {selectedMarker.type === 'truck' ? (
+              <div>
+                <p className="font-bold text-xs text-blue-700">🚛 Collection Truck</p>
+                <p className="text-xs font-semibold mt-1">Plate: {selectedMarker.plate_number}</p>
+                <p className="text-[11px] text-slate-600">Driver: {selectedMarker.driver_name}</p>
+              </div>
+            ) : (
+              <div>
+                <p className="font-bold text-xs text-emerald-700">🏠 Customer Outlet</p>
+                <p className="text-xs font-semibold mt-1">{selectedMarker.full_name}</p>
+                <p className="text-[11px] text-slate-600 truncate">{selectedMarker.address}</p>
+                <span className="inline-block mt-1 text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono">
+                  {selectedMarker.status}
+                </span>
+              </div>
+            )}
+          </div>
+        </InfoWindow>
+      )}
+    </GoogleMap>
   );
 }
