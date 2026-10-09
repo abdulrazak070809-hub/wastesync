@@ -1,22 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 
-const mapContainerStyle = {
-  width: '100%',
-  height: '100%',
-  minHeight: '380px',
-  borderRadius: '0.75rem',
-};
-
-// Default map center: Lagos, Nigeria coordinates
 const defaultCenter = {
   lat: 6.5244,
   lng: 3.3792,
 };
 
-// Dark-themed map styling matching WasteSync's UI
 const darkMapStyle = [
   { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
@@ -66,6 +57,16 @@ export default function FleetMap({ trucks, customers }: FleetMapProps) {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
   });
 
+  const containerStyle: React.CSSProperties = useMemo(
+    () => ({
+      width: '100%',
+      height: '100%',
+      minHeight: '380px',
+      borderRadius: '0.75rem',
+    }),
+    []
+  );
+
   const options = useMemo(
     () => ({
       styles: darkMapStyle,
@@ -80,7 +81,7 @@ export default function FleetMap({ trucks, customers }: FleetMapProps) {
       <div className="w-full h-full min-h-[350px] bg-slate-900 border border-slate-800 rounded-lg flex flex-col items-center justify-center p-4">
         <p className="text-xs text-rose-400 font-semibold mb-1">Failed to load Google Maps</p>
         <p className="text-[11px] text-slate-500 text-center">
-          Verify NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is set in .env.local and Vercel.
+          Verify NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is set in Vercel.
         </p>
       </div>
     );
@@ -96,12 +97,11 @@ export default function FleetMap({ trucks, customers }: FleetMapProps) {
 
   return (
     <GoogleMap
-      mapContainerStyle={mapContainerStyle}
+      mapContainerStyle={containerStyle}
       center={defaultCenter}
       zoom={11}
       options={options}
     >
-      {/* Vehicle Truck Markers (Blue Icons) */}
       {trucks.map((truck) => (
         <Marker
           key={`truck-${truck.id}`}
@@ -113,7 +113,6 @@ export default function FleetMap({ trucks, customers }: FleetMapProps) {
         />
       ))}
 
-      {/* Customer Location Markers (Green Icons) */}
       {customers.map((customer) => (
         <Marker
           key={`customer-${customer.id}`}
@@ -125,7 +124,6 @@ export default function FleetMap({ trucks, customers }: FleetMapProps) {
         />
       ))}
 
-      {/* Interactive Info Popup */}
       {selectedMarker && (
         <InfoWindow
           position={{
