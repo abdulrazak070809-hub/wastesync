@@ -27,7 +27,6 @@ export default function DispatcherCommandCenter() {
 
   // Route Protection Check
   useEffect(() => {
-    // Check local session/cookie flag
     const session = localStorage.getItem('wastesync_session');
     if (!session) {
       router.push('/login');
@@ -36,7 +35,7 @@ export default function DispatcherCommandCenter() {
     }
   }, [router]);
 
-  // Nigerian Regional Initial Data
+  // Nigerian Regional Data Nodes
   const [customers, setCustomers] = useState<CustomerNode[]>([
     {
       id: '1',
@@ -340,7 +339,7 @@ export default function DispatcherCommandCenter() {
           <div className="p-6 space-y-6 max-w-[1720px] mx-auto w-full">
             {/* VIEW 1: COMMAND CONSOLE */}
             {activeView === 'console' && (
-              <>
+              <div className="space-y-6">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#222a3d]/60">
                   <div className="space-y-1">
                     <Link
@@ -453,7 +452,7 @@ export default function DispatcherCommandCenter() {
                     </div>
                   </section>
                 </div>
-              </>
+              </div>
             )}
 
             {/* VIEW 2: ROUTE OPTIMIZER */}
@@ -493,3 +492,67 @@ export default function DispatcherCommandCenter() {
                     <p className="text-[13px] text-[#bbcabf]">Real-time vehicle diagnostics & fuel telemetry</p>
                   </div>
                 </div>
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg bg-[#060e20] flex justify-between items-center">
+                    <div>
+                      <div className="font-bold text-[#dae2fd]">TRK-04 (18T Heavy Compactor)</div>
+                      <div className="text-[12px] text-[#bbcabf]">Driver: Marcus Cole • Fuel 82% • Battery 99%</div>
+                    </div>
+                    <span className="px-2 py-1 bg-[#4edea3]/20 text-[#4edea3] rounded font-mono text-[10px]">
+                      EN ROUTE - WUSE 2
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* VIEW 4: SENSOR MATRIX */}
+            {activeView === 'sensors' && (
+              <div className="p-6 rounded-xl bg-[#131b2e] border border-[#222a3d] space-y-4">
+                <div className="flex items-center gap-3 border-b border-[#222a3d] pb-3">
+                  <span className="material-symbols-outlined text-[#4edea3] text-[28px]">sensors</span>
+                  <div>
+                    <h2 className="text-[20px] font-bold text-[#dae2fd]">IoT Ultrasonic Sensor Matrix</h2>
+                    <p className="text-[13px] text-[#bbcabf]">Municipal bin telemetry & compaction metrics</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-3 bg-[#060e20] rounded-lg">
+                    <div className="text-[10px] text-[#86948a]">TOTAL ACTIVE SENSORS</div>
+                    <div className="text-[20px] font-bold text-[#4edea3]">148 Bins</div>
+                  </div>
+                  <div className="p-3 bg-[#060e20] rounded-lg">
+                    <div className="text-[10px] text-[#86948a]">CRITICAL CAPACITY (&gt;90%)</div>
+                    <div className="text-[20px] font-bold text-[#ffb95f]">3 Bins</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* VIEW 5: HAZARD ALERTS */}
+            {activeView === 'hazards' && (
+              <div className="p-6 rounded-xl bg-[#131b2e] border border-[#222a3d] space-y-4">
+                <div className="flex items-center gap-3 border-b border-[#222a3d] pb-3">
+                  <span className="material-symbols-outlined text-[#ffb4ab] text-[28px]">warning</span>
+                  <div>
+                    <h2 className="text-[20px] font-bold text-[#dae2fd]">Hazard & Obstacle Alerts</h2>
+                    <p className="text-[13px] text-[#bbcabf]">Road closures, gate code locks & spill reports</p>
+                  </div>
+                </div>
+                <div className="p-3 bg-[#93000a]/20 border border-[#ffb4ab]/40 rounded-lg text-[#ffb4ab] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]">block</span>
+                    <span>Wuse Zone 5 Outlet Gate Lock #4410 Unresponsive</span>
+                  </div>
+                  <button className="px-3 py-1 bg-[#ffb4ab] text-[#690005] font-semibold text-[12px] rounded">
+                    Triage Dispatch
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
