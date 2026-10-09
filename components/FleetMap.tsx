@@ -1,157 +1,569 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+import { Toaster, toast } from 'sonner';
+import {
+  ShieldCheck,
+  LogOut,
+  ArrowLeft,
+  PlusCircle,
+  Send,
+  Trash2,
+  Edit2,
+  Check,
+  X,
+  Search,
+  Users,
+  Filter,
+} from 'lucide-react';
 
-const defaultCenter = {
-  lat: 6.5244,
-  lng: 3.3792,
-};
+export default function DispatcherAdminPage() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
+  const [activeTab, setActiveTab] = useState<'directory' | 'dispatch' | 'register'>('directory');
 
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-  {
-    featureType: 'administrative.locality',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#cbd5e1' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#64748b' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry',
-    stylers: [{ color: '#334155' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry.stroke',
-    stylers: [{ color: '#1e293b' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry',
-    stylers: [{ color: '#475569' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'geometry',
-    stylers: [{ color: '#0f172a' }],
-  },
-];
+  const [trucks, setTrucks] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-interface FleetMapProps {
-  trucks: any[];
-  customers: any[];
-}
+  // Search & Filter
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
-export default function FleetMap({ trucks, customers }: FleetMapProps) {
-  const [selectedMarker, setSelectedMarker] = useState<any | null>(null);
+  // Edit State
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    full_name: '',
+    phone_number: '',
+    address: '',
+    subscription_status: 'ACTIVE',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
 
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+  // Registration & Dispatch Forms
+  const [customerForm, setCustomerForm] = useState({
+    full_name: '',
+    phone_number: '',
+    address: '',
+    subscription_status: 'ACTIVE',
   });
 
-  const containerStyle: React.CSSProperties = useMemo(
-    () => ({
-      width: '100%',
-      height: '100%',
-      minHeight: '380px',
-      borderRadius: '0.75rem',
-    }),
-    []
-  );
+  const [dispatchForm, setDispatchForm] = useState({
+    customer_id: '',
+    truck_id: '',
+    notes: 'Scheduled for dispatch pickup',
+  });
 
-  const options = useMemo(
-    () => ({
-      styles: darkMapStyle,
-      disableDefaultUI: false,
-      zoomControl: true,
-    }),
-    []
-  );
+  useEffect(() => {
+    const auth = sessionStorage.getItem('wastesync_admin_authenticated');
+    if (auth !== 'true') {
+      router.push('/login');
+    } else {
+      setAuthorized(true);
+      fetchDropdownData();
+    }
+  }, [router]);
 
-  if (loadError) {
-    return (
-      <div className="w-full h-full min-h-[350px] bg-slate-900 border border-slate-800 rounded-lg flex flex-col items-center justify-center p-4">
-        <p className="text-xs text-rose-400 font-semibold mb-1">Failed to load Google Maps</p>
-        <p className="text-[11px] text-slate-500 text-center">
-          Verify NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is set in Vercel.
-        </p>
-      </div>
-    );
+  async function fetchDropdownData() {
+    const { data: truckData } = await supabase.from('trucks').select('*');
+    const { data: customerData } = await supabase
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setTrucks(truckData || []);
+    setCustomers(customerData || []);
   }
 
-  if (!isLoaded) {
-    return (
-      <div className="w-full h-full min-h-[350px] bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-center">
-        <p className="text-xs text-slate-400 animate-pulse">Loading Google Maps Telemetry...</p>
-      </div>
-    );
+  function handleLogout() {
+    sessionStorage.removeItem('wastesync_admin_authenticated');
+    toast.info('Signed out successfully');
+    router.push('/login');
   }
+
+  // Filtered Customer List
+  const filteredCustomers = useMemo(() => {
+    return customers.filter((c) => {
+      const matchesSearch =
+        c.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.phone_number?.includes(searchQuery) ||
+        c.address?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesStatus = statusFilter === 'ALL' || c.subscription_status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [customers, searchQuery, statusFilter]);
+
+  async function handleAddCustomer(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const { data: orgs } = await supabase.from('organizations').select('id').limit(1);
+      const orgId = orgs?.[0]?.id || 'a1b2c3d4-0000-0000-0000-000000000001';
+
+      const { error } = await supabase.from('customers').insert([
+        {
+          organization_id: orgId,
+          full_name: customerForm.full_name,
+          phone_number: customerForm.phone_number,
+          address: customerForm.address,
+          subscription_status: customerForm.subscription_status,
+        },
+      ]);
+
+      if (error) throw error;
+      toast.success(`Customer "${customerForm.full_name}" registered successfully!`);
+      setCustomerForm({ full_name: '', phone_number: '', address: '', subscription_status: 'ACTIVE' });
+      fetchDropdownData();
+      setActiveTab('directory');
+    } catch (err: any) {
+      toast.error('Error saving customer: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleStartEdit(customer: any) {
+    setEditingId(customer.id);
+    setEditForm({
+      full_name: customer.full_name,
+      phone_number: customer.phone_number,
+      address: customer.address,
+      subscription_status: customer.subscription_status,
+    });
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+  }
+
+  async function handleSaveEdit(customerId: string) {
+    setSavingEdit(true);
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({
+          full_name: editForm.full_name,
+          phone_number: editForm.phone_number,
+          address: editForm.address,
+          subscription_status: editForm.subscription_status,
+        })
+        .eq('id', customerId);
+
+      if (error) throw error;
+
+      toast.success('Customer details updated successfully!');
+      setEditingId(null);
+      fetchDropdownData();
+    } catch (err: any) {
+      toast.error('Error updating customer: ' + err.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDeleteCustomer(customerId: string, customerName: string) {
+    if (!confirm(`Are you sure you want to remove ${customerName}?`)) return;
+
+    setDeletingId(customerId);
+    try {
+      const { error } = await supabase.from('customers').delete().eq('id', customerId);
+      if (error) throw error;
+
+      toast.success(`Removed customer "${customerName}"`);
+      fetchDropdownData();
+    } catch (err: any) {
+      toast.error('Error deleting customer: ' + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleDispatchRoute(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('pickup_logs').insert([
+        {
+          customer_id: dispatchForm.customer_id,
+          truck_id: dispatchForm.truck_id,
+          status: 'PENDING',
+          notes: dispatchForm.notes,
+        },
+      ]);
+
+      if (error) throw error;
+      toast.success('Route assigned to collection truck driver successfully!');
+      setDispatchForm({ customer_id: '', truck_id: '', notes: 'Scheduled for dispatch pickup' });
+    } catch (err: any) {
+      toast.error('Error assigning route: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!authorized) return null;
 
   return (
-    <GoogleMap
-      mapContainerStyle={containerStyle}
-      center={defaultCenter}
-      zoom={11}
-      options={options}
-    >
-      {trucks.map((truck) => (
-        <Marker
-          key={`truck-${truck.id}`}
-          position={{ lat: truck.coordinates[1], lng: truck.coordinates[0] }}
-          onClick={() => setSelectedMarker({ ...truck, type: 'truck' })}
-          icon={{
-            url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-          }}
-        />
-      ))}
+    <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
+      <Toaster position="top-right" theme="dark" richColors />
 
-      {customers.map((customer) => (
-        <Marker
-          key={`customer-${customer.id}`}
-          position={{ lat: customer.coordinates[1], lng: customer.coordinates[0] }}
-          onClick={() => setSelectedMarker({ ...customer, type: 'customer' })}
-          icon={{
-            url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-          }}
-        />
-      ))}
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-800 gap-4">
+          <div>
+            <Link href="/" className="text-xs text-emerald-400 hover:underline flex items-center gap-1 mb-2">
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Telemetry Map Dashboard
+            </Link>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <ShieldCheck className="w-6 h-6 text-emerald-400" />
+              Dispatcher Command Center
+            </h1>
+          </div>
 
-      {selectedMarker && (
-        <InfoWindow
-          position={{
-            lat: selectedMarker.coordinates[1],
-            lng: selectedMarker.coordinates[0],
-          }}
-          onCloseClick={() => setSelectedMarker(null)}
-        >
-          <div className="p-2 text-slate-900 max-w-[200px]">
-            {selectedMarker.type === 'truck' ? (
-              <div>
-                <p className="font-bold text-xs text-blue-700">🚛 Collection Truck</p>
-                <p className="text-xs font-semibold mt-1">Plate: {selectedMarker.plate_number}</p>
-                <p className="text-[11px] text-slate-600">Driver: {selectedMarker.driver_name}</p>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm transition self-start sm:self-auto"
+          >
+            <LogOut className="w-4 h-4" /> Sign Out
+          </button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex border-b border-slate-800 gap-2">
+          <button
+            onClick={() => setActiveTab('directory')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition ${
+              activeTab === 'directory'
+                ? 'border-emerald-400 text-emerald-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Users className="w-4 h-4" /> Customer Directory ({customers.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('dispatch')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition ${
+              activeTab === 'dispatch'
+                ? 'border-blue-400 text-blue-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Send className="w-4 h-4" /> Dispatch Route
+          </button>
+
+          <button
+            onClick={() => setActiveTab('register')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium text-sm border-b-2 transition ${
+              activeTab === 'register'
+                ? 'border-emerald-400 text-emerald-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <PlusCircle className="w-4 h-4" /> Register New Outlet
+          </button>
+        </div>
+
+        {/* Tab 1: Customer Directory with Search and Edit */}
+        {activeTab === 'directory' && (
+          <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6">
+            {/* Search & Filter Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/60 p-3 rounded-xl border border-slate-700/80">
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search name, phone, address..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
               </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 w-full sm:w-auto"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="OVERDUE">OVERDUE</option>
+                  <option value="SUSPENDED">SUSPENDED</option>
+                </select>
+              </div>
+            </div>
+
+            {/* List */}
+            {filteredCustomers.length === 0 ? (
+              <p className="text-xs text-slate-400 italic text-center py-8">
+                No matching customer outlets found.
+              </p>
             ) : (
-              <div>
-                <p className="font-bold text-xs text-emerald-700">🏠 Customer Outlet</p>
-                <p className="text-xs font-semibold mt-1">{selectedMarker.full_name}</p>
-                <p className="text-[11px] text-slate-600 truncate">{selectedMarker.address}</p>
-                <span className="inline-block mt-1 text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono">
-                  {selectedMarker.status}
-                </span>
+              <div className="divide-y divide-slate-700/60 max-h-[480px] overflow-y-auto pr-2">
+                {filteredCustomers.map((customer) => (
+                  <div key={customer.id} className="py-3.5">
+                    {editingId === customer.id ? (
+                      /* Inline Edit Form */
+                      <div className="space-y-3 bg-slate-900/90 p-4 rounded-xl border border-amber-500/30">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                              Full Name
+                            </label>
+                            <input
+                              type="text"
+                              value={editForm.full_name}
+                              onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                              Phone Number
+                            </label>
+                            <input
+                              type="text"
+                              value={editForm.phone_number}
+                              onChange={(e) => setEditForm({ ...editForm, phone_number: e.target.value })}
+                              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                              Street Address
+                            </label>
+                            <input
+                              type="text"
+                              value={editForm.address}
+                              onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                              Status
+                            </label>
+                            <select
+                              value={editForm.subscription_status}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, subscription_status: e.target.value })
+                              }
+                              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                            >
+                              <option value="ACTIVE">ACTIVE</option>
+                              <option value="OVERDUE">OVERDUE</option>
+                              <option value="SUSPENDED">SUSPENDED</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            onClick={handleCancelEdit}
+                            className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1 rounded text-xs transition"
+                          >
+                            <X className="w-3.5 h-3.5" /> Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSaveEdit(customer.id)}
+                            disabled={savingEdit}
+                            className="flex items-center gap-1 bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs transition disabled:opacity-50"
+                          >
+                            <Check className="w-3.5 h-3.5" /> {savingEdit ? 'Saving...' : 'Save Changes'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Read Only View */
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-slate-200 text-sm">{customer.full_name}</p>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+                                customer.subscription_status === 'ACTIVE'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                              }`}
+                            >
+                              {customer.subscription_status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {customer.address} • {customer.phone_number}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleStartEdit(customer)}
+                            className="flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" /> Edit
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteCustomer(customer.id, customer.full_name)}
+                            disabled={deletingId === customer.id}
+                            className="flex items-center gap-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            {deletingId === customer.id ? 'Removing...' : 'Delete'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
-        </InfoWindow>
-      )}
-    </GoogleMap>
+        )}
+
+        {/* Tab 2: Dispatch Route */}
+        {activeTab === 'dispatch' && (
+          <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-6 shadow-xl max-w-2xl mx-auto">
+            <h2 className="text-lg font-semibold text-blue-400 mb-4 flex items-center gap-2">
+              <Send className="w-5 h-5" /> Assign Collection Route
+            </h2>
+
+            <form onSubmit={handleDispatchRoute} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Select Customer</label>
+                <select
+                  required
+                  value={dispatchForm.customer_id}
+                  onChange={(e) => setDispatchForm({ ...dispatchForm, customer_id: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">-- Choose Customer Target --</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name} ({c.address})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Assign Truck</label>
+                <select
+                  required
+                  value={dispatchForm.truck_id}
+                  onChange={(e) => setDispatchForm({ ...dispatchForm, truck_id: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">-- Choose Fleet Truck --</option>
+                  {trucks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.plate_number} - Driver: {t.driver_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Dispatch Notes</label>
+                <input
+                  type="text"
+                  value={dispatchForm.notes}
+                  onChange={(e) => setDispatchForm({ ...dispatchForm, notes: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500"
+                  placeholder="e.g. Empty 3 commercial bins"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg text-sm transition disabled:opacity-50"
+              >
+                {submitting ? 'Dispatching Route...' : 'Confirm Route Assignment'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Tab 3: Register Outlet */}
+        {activeTab === 'register' && (
+          <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-6 shadow-xl max-w-2xl mx-auto">
+            <h2 className="text-lg font-semibold text-emerald-400 mb-4 flex items-center gap-2">
+              <PlusCircle className="w-5 h-5" /> Register New Household / Outlet
+            </h2>
+
+            <form onSubmit={handleAddCustomer} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={customerForm.full_name}
+                  onChange={(e) => setCustomerForm({ ...customerForm, full_name: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+                  placeholder="e.g. Babajide Micheal"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Phone Number</label>
+                <input
+                  type="text"
+                  required
+                  value={customerForm.phone_number}
+                  onChange={(e) => setCustomerForm({ ...customerForm, phone_number: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+                  placeholder="08032471058"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Street Address</label>
+                <input
+                  type="text"
+                  required
+                  value={customerForm.address}
+                  onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+                  placeholder="12 Marina Road, Lagos"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Subscription Status</label>
+                <select
+                  value={customerForm.subscription_status}
+                  onChange={(e) => setCustomerForm({ ...customerForm, subscription_status: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="OVERDUE">OVERDUE</option>
+                  <option value="SUSPENDED">SUSPENDED</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg text-sm transition disabled:opacity-50"
+              >
+                {submitting ? 'Saving Location...' : 'Save Customer Location'}
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
