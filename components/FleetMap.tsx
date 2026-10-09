@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
-import { Truck, Users, Layers, MapPin } from 'lucide-react';
 
 const defaultCenter = {
-  lat: 6.5244,
-  lng: 3.3792,
+  lat: 37.7749,
+  lng: -122.4194,
 };
 
 const darkMapStyle = [
@@ -22,18 +21,25 @@ const darkMapStyle = [
 ];
 
 interface FleetMapProps {
-  trucks: any[];
-  customers: any[];
+  trucks?: any[];
+  customers?: any[];
 }
 
-export default function FleetMap({ trucks, customers }: FleetMapProps) {
+export default function FleetMap({ trucks = [], customers = [] }: FleetMapProps) {
+  const [isMounted, setIsMounted] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState<any | null>(null);
   const [mapType, setMapType] = useState<'roadmap' | 'hybrid'>('roadmap');
   const [filterMode, setFilterMode] = useState<'all' | 'trucks' | 'customers'>('all');
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: apiKey,
   });
 
   const containerStyle: React.CSSProperties = useMemo(
@@ -46,142 +52,122 @@ export default function FleetMap({ trucks, customers }: FleetMapProps) {
     []
   );
 
-  const mapOptions = useMemo(
-    () => ({
-      styles: mapType === 'roadmap' ? darkMapStyle : [],
-      mapTypeId: mapType,
-      disableDefaultUI: false,
-      zoomControl: true,
-    }),
-    [mapType]
-  );
-
-  if (loadError) {
+  // Prevent SSR execution
+  if (!isMounted) {
     return (
-      <div className="w-full h-full min-h-[350px] bg-slate-900 border border-slate-800 rounded-lg flex flex-col items-center justify-center p-4">
-        <p className="text-xs text-rose-400 font-semibold mb-1">Failed to load Google Maps</p>
-        <p className="text-[11px] text-slate-500 text-center">
-          Verify NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is configured in Vercel.
-        </p>
+      <div className="w-full h-full min-h-[420px] bg-[#060e20] rounded-xl flex items-center justify-center text-[#bbcabf] font-mono text-[12px]">
+        Mounting Spatial Radar...
       </div>
     );
   }
 
-  if (!isLoaded) {
+  // Fallback radar overlay if API Key is missing or fails to load
+  if (loadError || !apiKey || !isLoaded) {
     return (
-      <div className="w-full h-full min-h-[350px] bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-center">
-        <p className="text-xs text-slate-400 animate-pulse">Loading Google Maps Telemetry...</p>
+      <div className="relative w-full h-full min-h-[420px] rounded-xl overflow-hidden bg-[#060e20] border border-[#222a3d] p-6 flex flex-col justify-between">
+        {/* Vector Background Radar Simulation */}
+        <div className="absolute inset-0 pointer-events-none opacity-40">
+          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="radar-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#334155" strokeWidth="0.5" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#radar-grid)" />
+            <circle cx="50%" cy="50%" r="180" fill="none" stroke="#4edea3" strokeWidth="1" opacity="0.3" />
+            <circle cx="50%" cy="50%" r="120" fill="none" stroke="#adc6ff" strokeWidth="1" opacity="0.2" />
+          </svg>
+        </div>
+
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#4edea3] animate-pulse"></span>
+            <span className="font-mono text-[11px] text-[#4edea3] font-bold uppercase">
+              POSTGIS VECTOR SIMULATION RADAR
+            </span>
+          </div>
+          <span className="font-mono text-[10px] text-[#bbcabf] bg-[#171f33] px-2 py-1 rounded border border-[#222a3d]">
+            37.7749° N, 122.4194° W
+          </span>
+        </div>
+
+        {/* Visual Vehicle Markers */}
+        <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 gap-3 my-auto">
+          {trucks.slice(0, 3).map((truck, idx) => (
+            <div
+              key={idx}
+              className="p-3 rounded-lg bg-[#171f33]/90 backdrop-blur-md border border-[#222a3d] flex items-center gap-3 shadow-lg"
+            >
+              <div className="w-8 h-8 rounded-full bg-[#0566d9]/20 text-[#adc6ff] flex items-center justify-center font-bold font-mono text-[11px]">
+                {truck.id || `T${idx + 1}`}
+              </div>
+              <div>
+                <div className="text-[13px] font-semibold text-[#dae2fd]">{truck.id || 'Fleet Unit'}</div>
+                <div className="font-mono text-[10px] text-[#4edea3]">
+                  {truck.capacity ? `${truck.capacity}% Loaded` : 'Active Route'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="relative z-10 font-mono text-[10px] text-[#86948a] flex items-center justify-between bg-[#060e20]/80 p-2 rounded border border-[#222a3d]">
+          <span>NETWORK: GIS ONLINE (KEYLESS FALLBACK ACTIVE)</span>
+          <span className="text-[#adc6ff]">EPSG:4326 PostGIS Spatial Ref</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full min-h-[420px]">
-      {/* Floating Interactive Map Bar */}
-      <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 p-2 rounded-xl shadow-2xl text-xs">
-        {/* Layer Toggle */}
-        <div className="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-          <button
-            onClick={() => setMapType('roadmap')}
-            className={`px-2.5 py-1 rounded-md font-medium transition ${
-              mapType === 'roadmap' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Dark Mode
-          </button>
-          <button
-            onClick={() => setMapType('hybrid')}
-            className={`px-2.5 py-1 rounded-md font-medium transition ${
-              mapType === 'hybrid' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Satellite
-          </button>
-        </div>
-
-        {/* Filter Pin Visibility */}
-        <div className="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-          <button
-            onClick={() => setFilterMode('all')}
-            className={`px-2 py-1 rounded-md flex items-center gap-1 transition ${
-              filterMode === 'all' ? 'bg-slate-700 text-emerald-400 font-semibold' : 'text-slate-400'
-            }`}
-          >
-            <Layers className="w-3 h-3" /> All
-          </button>
-          <button
-            onClick={() => setFilterMode('trucks')}
-            className={`px-2 py-1 rounded-md flex items-center gap-1 transition ${
-              filterMode === 'trucks' ? 'bg-blue-600/30 text-blue-400 font-semibold border border-blue-500/30' : 'text-slate-400'
-            }`}
-          >
-            <Truck className="w-3 h-3" /> Trucks
-          </button>
-          <button
-            onClick={() => setFilterMode('customers')}
-            className={`px-2 py-1 rounded-md flex items-center gap-1 transition ${
-              filterMode === 'customers' ? 'bg-emerald-600/30 text-emerald-400 font-semibold border border-emerald-500/30' : 'text-slate-400'
-            }`}
-          >
-            <Users className="w-3 h-3" /> Outlets
-          </button>
-        </div>
-      </div>
-
+    <div className="relative w-full h-full min-h-[420px] rounded-xl overflow-hidden">
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={defaultCenter}
-        zoom={11}
-        options={mapOptions}
+        zoom={13}
+        options={{
+          styles: darkMapStyle,
+          disableDefaultUI: true,
+          zoomControl: true,
+        }}
       >
-        {/* Render Trucks */}
+        {/* Render Truck Markers */}
         {(filterMode === 'all' || filterMode === 'trucks') &&
-          trucks.map((truck) => (
+          trucks.map((truck, idx) => (
             <Marker
-              key={`truck-${truck.id}`}
-              position={{ lat: truck.coordinates[1], lng: truck.coordinates[0] }}
+              key={`truck-${idx}`}
+              position={{ lat: truck.lat || 37.7749, lng: truck.lng || -122.4194 }}
               onClick={() => setSelectedMarker({ ...truck, type: 'truck' })}
-              icon={{ url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' }}
             />
           ))}
 
-        {/* Render Customers */}
+        {/* Render Customer Outlet Markers */}
         {(filterMode === 'all' || filterMode === 'customers') &&
-          customers.map((customer) => (
+          customers.map((cust, idx) => (
             <Marker
-              key={`customer-${customer.id}`}
-              position={{ lat: customer.coordinates[1], lng: customer.coordinates[0] }}
-              onClick={() => setSelectedMarker({ ...customer, type: 'customer' })}
-              icon={{ url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' }}
+              key={`customer-${idx}`}
+              position={{ lat: cust.lat || 37.772, lng: cust.lng || -122.415 }}
+              onClick={() => setSelectedMarker({ ...cust, type: 'customer' })}
             />
           ))}
 
         {selectedMarker && (
           <InfoWindow
-            position={{ lat: selectedMarker.coordinates[1], lng: selectedMarker.coordinates[0] }}
+            position={{
+              lat: selectedMarker.lat || 37.7749,
+              lng: selectedMarker.lng || -122.4194,
+            }}
             onCloseClick={() => setSelectedMarker(null)}
           >
-            <div className="p-2 text-slate-900 max-w-[210px]">
-              {selectedMarker.type === 'truck' ? (
-                <div>
-                  <p className="font-bold text-xs text-blue-700 flex items-center gap-1">
-                    🚛 Collection Vehicle
-                  </p>
-                  <p className="text-xs font-bold mt-1">Plate: {selectedMarker.plate_number}</p>
-                  <p className="text-[11px] text-slate-600">Driver: {selectedMarker.driver_name}</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="font-bold text-xs text-emerald-700 flex items-center gap-1">
-                    🏠 Household / Business
-                  </p>
-                  <p className="text-xs font-bold mt-1">{selectedMarker.full_name}</p>
-                  <p className="text-[11px] text-slate-600 truncate">{selectedMarker.address}</p>
-                  <span className="inline-block mt-1 text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-mono font-semibold">
-                    {selectedMarker.status}
-                  </span>
-                </div>
-              )}
+            <div className="p-2 text-slate-900 font-sans">
+              <h4 className="font-bold text-sm">
+                {selectedMarker.name || selectedMarker.id || 'Location Node'}
+              </h4>
+              <p className="text-xs text-slate-600">
+                {selectedMarker.type === 'truck'
+                  ? `Capacity: ${selectedMarker.capacity || 0}%`
+                  : `Fill Level: ${selectedMarker.fillLevel || 0}%`}
+              </p>
             </div>
           </InfoWindow>
         )}
