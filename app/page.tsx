@@ -5,8 +5,17 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { exportToCSV } from '@/lib/export';
-import { Truck, Users, CheckCircle, AlertTriangle, RefreshCw, Navigation, Download, Smartphone, Lock, Unlock } from 'lucide-react';
-import Modal from '@/components/Modal';
+import {
+  Truck,
+  Users,
+  CheckCircle,
+  AlertTriangle,
+  RefreshCw,
+  Navigation,
+  Download,
+  Smartphone,
+  Lock,
+} from 'lucide-react';
 
 // Disable SSR for Mapbox GL component to prevent Vercel build/runtime crashes
 const FleetMap = dynamic(() => import('@/components/FleetMap'), {
@@ -29,52 +38,26 @@ export default function DispatcherDashboard() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal Visibility States
-  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
-
-  // Admin Auth Gate State
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-  const [passcodeModalOpen, setPasscodeModalOpen] = useState(false);
-  const [passcodeInput, setPasscodeInput] = useState('');
-  const [pendingAction, setPendingAction] = useState<'customer' | 'dispatch' | null>(null);
-
   // Proximity Query States
   const [selectedCustomerForProximity, setSelectedCustomerForProximity] = useState('');
   const [nearestTrucks, setNearestTrucks] = useState<any[]>([]);
   const [calculatingProximity, setCalculatingProximity] = useState(false);
 
-  // Form States
-  const [customerForm, setCustomerForm] = useState({
-    full_name: '',
-    phone_number: '',
-    address: '',
-    subscription_status: 'ACTIVE',
-  });
-
-  const [dispatchForm, setDispatchForm] = useState({
-    customer_id: '',
-    truck_id: '',
-    notes: 'Scheduled for dispatch pickup',
-  });
-
-  const [submitting, setSubmitting] = useState(false);
-
   useEffect(() => {
     fetchDashboardData();
 
-    // Check if admin is unlocked in current browser session
-    const unlocked = sessionStorage.getItem('wastesync_admin_unlocked');
-    if (unlocked === 'true') {
-      setIsAdminUnlocked(true);
-    }
-
-    // Subscribe to live Postgres database changes
+    // Subscribe to live Postgres database changes via WebSockets
     const channel = supabase
       .channel('wastesync-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trucks' }, () => fetchDashboardData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, () => fetchDashboardData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pickup_logs' }, () => fetchDashboardData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trucks' }, () =>
+        fetchDashboardData()
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, () =>
+        fetchDashboardData()
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pickup_logs' }, () =>
+        fetchDashboardData()
+      )
       .subscribe();
 
     return () => {
@@ -85,10 +68,20 @@ export default function DispatcherDashboard() {
   async function fetchDashboardData() {
     setLoading(true);
     try {
-      const { count: truckCount } = await supabase.from('trucks').select('*', { count: 'exact', head: true });
-      const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
-      const { count: completedCount } = await supabase.from('pickup_logs').select('*', { count: 'exact', head: true }).eq('status', 'COLLECTED');
-      const { count: missedCount } = await supabase.from('pickup_logs').select('*', { count: 'exact', head: true }).eq('status', 'MISSED');
+      const { count: truckCount } = await supabase
+        .from('trucks')
+        .select('*', { count: 'exact', head: true });
+      const { count: customerCount } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true });
+      const { count: completedCount } = await supabase
+        .from('pickup_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'COLLECTED');
+      const { count: missedCount } = await supabase
+        .from('pickup_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'MISSED');
 
       setStats({
         totalTrucks: truckCount || 0,
@@ -124,35 +117,6 @@ export default function DispatcherDashboard() {
     }
   }
 
-  // Admin Auth Verification
-  function handleAdminUnlock(e: React.FormEvent) {
-    e.preventDefault();
-    const correctPasscode = process.env.NEXT_PUBLIC_ADMIN_PASSCODE || 'admin123';
-
-    if (passcodeInput === correctPasscode) {
-      setIsAdminUnlocked(true);
-      sessionStorage.setItem('wastesync_admin_unlocked', 'true');
-      setPasscodeModalOpen(false);
-      setPasscodeInput('');
-
-      if (pendingAction === 'customer') setIsCustomerModalOpen(true);
-      if (pendingAction === 'dispatch') setIsDispatchModalOpen(true);
-      setPendingAction(null);
-    } else {
-      alert('Incorrect Admin Passcode!');
-    }
-  }
-
-  function triggerProtectedAction(action: 'customer' | 'dispatch') {
-    if (isAdminUnlocked) {
-      if (action === 'customer') setIsCustomerModalOpen(true);
-      if (action === 'dispatch') setIsDispatchModalOpen(true);
-    } else {
-      setPendingAction(action);
-      setPasscodeModalOpen(true);
-    }
-  }
-
   // Execute PostGIS RPC Distance Function
   async function findNearestTrucks(customerId: string) {
     if (!customerId) return;
@@ -180,7 +144,9 @@ export default function DispatcherDashboard() {
     try {
       const { data } = await supabase
         .from('pickup_logs')
-        .select('id, status, notes, created_at, customers(full_name, address), trucks(plate_number, driver_name)');
+        .select(
+          'id, status, notes, created_at, customers(full_name, address), trucks(plate_number, driver_name)'
+        );
 
       if (!data || data.length === 0) {
         alert('No pickup records found to export.');
@@ -201,62 +167,6 @@ export default function DispatcherDashboard() {
       exportToCSV(formattedData, `wastesync-audit-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (err: any) {
       alert('Failed to export CSV: ' + err.message);
-    }
-  }
-
-  // Handle Add New Customer
-  async function handleAddCustomer(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const { data: orgs } = await supabase.from('organizations').select('id').limit(1);
-      const orgId = orgs?.[0]?.id || 'a1b2c3d4-0000-0000-0000-000000000001';
-
-      const { error } = await supabase.from('customers').insert([
-        {
-          organization_id: orgId,
-          full_name: customerForm.full_name,
-          phone_number: customerForm.phone_number,
-          address: customerForm.address,
-          subscription_status: customerForm.subscription_status,
-        },
-      ]);
-
-      if (error) throw error;
-
-      setIsCustomerModalOpen(false);
-      setCustomerForm({ full_name: '', phone_number: '', address: '', subscription_status: 'ACTIVE' });
-      fetchDashboardData();
-    } catch (err: any) {
-      alert('Error creating customer: ' + err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  // Handle Dispatch Route / Pickup Log
-  async function handleDispatchRoute(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const { error } = await supabase.from('pickup_logs').insert([
-        {
-          customer_id: dispatchForm.customer_id,
-          truck_id: dispatchForm.truck_id,
-          status: 'PENDING',
-          notes: dispatchForm.notes,
-        },
-      ]);
-
-      if (error) throw error;
-
-      setIsDispatchModalOpen(false);
-      setDispatchForm({ customer_id: '', truck_id: '', notes: 'Scheduled for dispatch pickup' });
-      fetchDashboardData();
-    } catch (err: any) {
-      alert('Error dispatching route: ' + err.message);
-    } finally {
-      setSubmitting(false);
     }
   }
 
@@ -347,39 +257,20 @@ export default function DispatcherDashboard() {
         {/* Dispatch Quick Actions & Tools */}
         <div className="space-y-6">
           <div className="bg-slate-800/50 border border-slate-700/80 rounded-xl p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-slate-200">Dispatcher Quick Actions</h2>
-              {isAdminUnlocked ? (
-                <span className="flex items-center gap-1 text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
-                  <Unlock className="w-3 h-3" /> Unlocked
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded border border-slate-600">
-                  <Lock className="w-3 h-3" /> Protected
-                </span>
-              )}
-            </div>
+            <h2 className="text-lg font-semibold text-slate-200 mb-4">
+              Dispatcher Quick Actions
+            </h2>
 
             <div className="space-y-3">
-              <button
-                onClick={() => triggerProtectedAction('customer')}
-                className="w-full text-left bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 p-3.5 rounded-lg transition text-sm font-medium flex items-center justify-between"
+              <Link
+                href="/dispatcher"
+                className="w-full text-left bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 p-3.5 rounded-lg transition text-sm font-medium flex items-center justify-between block"
               >
-                <span>+ Register New Customer Location</span>
-                <span className="text-xs bg-emerald-500/20 px-2 py-0.5 rounded">
-                  {isAdminUnlocked ? 'Action' : 'Locked 🔒'}
+                <span className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-emerald-400" /> Open Dispatcher Admin Center
                 </span>
-              </button>
-
-              <button
-                onClick={() => triggerProtectedAction('dispatch')}
-                className="w-full text-left bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 p-3.5 rounded-lg transition text-sm font-medium flex items-center justify-between"
-              >
-                <span>+ Assign Route to Collection Truck</span>
-                <span className="text-xs bg-blue-500/20 px-2 py-0.5 rounded">
-                  {isAdminUnlocked ? 'Action' : 'Locked 🔒'}
-                </span>
-              </button>
+                <span className="text-xs bg-emerald-500/20 px-2 py-0.5 rounded">Admin Only</span>
+              </Link>
 
               <button
                 onClick={handleExportReport}
@@ -410,7 +301,9 @@ export default function DispatcherDashboard() {
               <Navigation className="w-5 h-5 text-emerald-400" />
               PostGIS Spatial Proximity
             </h2>
-            <p className="text-xs text-slate-400 mb-4">Calculate nearest available trucks using PostgreSQL GIS indexing.</p>
+            <p className="text-xs text-slate-400 mb-4">
+              Calculate nearest available trucks using PostgreSQL GIS indexing.
+            </p>
 
             <select
               value={selectedCustomerForProximity}
@@ -426,13 +319,20 @@ export default function DispatcherDashboard() {
             </select>
 
             {calculatingProximity ? (
-              <p className="text-xs text-emerald-400 animate-pulse">Running PostGIS ST_Distance calculation...</p>
+              <p className="text-xs text-emerald-400 animate-pulse">
+                Running PostGIS ST_Distance calculation...
+              </p>
             ) : nearestTrucks.length > 0 ? (
               <div className="space-y-2">
                 {nearestTrucks.map((truck, idx) => (
-                  <div key={truck.id} className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-xs flex justify-between items-center">
+                  <div
+                    key={truck.id}
+                    className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-xs flex justify-between items-center"
+                  >
                     <div>
-                      <p className="font-semibold text-slate-200">{idx + 1}. Truck {truck.plate_number}</p>
+                      <p className="font-semibold text-slate-200">
+                        {idx + 1}. Truck {truck.plate_number}
+                      </p>
                       <p className="text-slate-400">Driver: {truck.driver_name}</p>
                     </div>
                     <span className="text-emerald-400 font-mono font-bold bg-emerald-500/10 px-2 py-1 rounded">
@@ -445,105 +345,6 @@ export default function DispatcherDashboard() {
           </div>
         </div>
       </div>
-
-      {/* MODAL 0: Admin Passcode Prompt */}
-      <Modal
-        isOpen={passcodeModalOpen}
-        onClose={() => setPasscodeModalOpen(false)}
-        title="Dispatcher Passcode Required"
-      >
-        <form onSubmit={handleAdminUnlock} className="space-y-4">
-          <p className="text-xs text-slate-400">
-            This action requires administrative access. Enter your dispatcher passcode to proceed.
-          </p>
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Admin Passcode</label>
-            <input
-              type="password"
-              required
-              value={passcodeInput}
-              onChange={(e) => setPasscodeInput(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <div className="pt-3 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setPasscodeModalOpen(false)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-medium transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition"
-            >
-              Unlock & Proceed
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* MODAL 1: Register New Customer */}
-      <Modal
-        isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
-        title="Register New Customer Location"
-      >
-        <form onSubmit={handleAddCustomer} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
-            <input
-              type="text"
-              required
-              value={customerForm.full_name}
-              onChange={(e) => setCustomerForm({ ...customerForm, full_name: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
-              placeholder="e.g. Babajide Sanwo-Olu"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Phone Number</label>
-            <input
-              type="text"
-              required
-              value={customerForm.phone_number}
-              onChange={(e) => setCustomerForm({ ...customerForm, phone_number: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
-              placeholder="+2348011112222"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Street Address</label>
-            <input
-              type="text"
-              required
-              value={customerForm.address}
-              onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
-              placeholder="10 Marina Road, Lagos"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Subscription Status</label>
-            <select
-              value={customerForm.subscription_status}
-              onChange={(e) => setCustomerForm({ ...customerForm, subscription_status: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
-            >
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="OVERDUE">OVERDUE</option>
-              <option value="SUSPENDED">SUSPENDED</option>
-            </select>
-          </div>
-
-          <div className="pt-3 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setIsCustomerModalOpen(false)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200
+    </div>
+  );
+}
